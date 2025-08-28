@@ -1,0 +1,6 @@
+*.db
+__pycache__
+Script
+data
+test    
+*.png

@@ -1,0 +1,36 @@
+
+=== GDT Captcha Training Workflow Report ===
+Generated: 2025-08-28 11:09:36
+
+Workflow Configuration:
+- Target images: 1000
+- Crawl delay: 1.0s
+- Test ratio: 0.2
+- Skip crawl: False
+- Skip labeling: False
+- Skip training: False
+
+Results:
+- Raw images crawled: 0
+- Images labeled for training: 0
+- Images in test set: 0
+- Model updated: Yes
+
+Success Rate:
+- Crawl success rate: 0.0%
+- Labeling completion: 0.0%
+- Training completion: 100%
+
+Next Steps:
+1. Test the trained model with new captcha images
+2. Deploy the updated model to production
+3. Monitor model performance over time
+4. Consider additional training if accuracy is insufficient
+
+Files Generated:
+- Raw images: D:\captcha_ocr_api-3.4.0\captcha_ocr_api-3.4.0\image_crawl\raw_captcha_images
+- Training images: D:\captcha_ocr_api-3.4.0\captcha_ocr_api-3.4.0\image_crawl\train_images
+- Test images: D:\captcha_ocr_api-3.4.0\captcha_ocr_api-3.4.0\image_crawl\test_images
+- Model: ocr\models\crnn\save\best.bin
+- Metadata: image_crawl/gdt_metadata.csv
+- Progress: image_crawl/labeling_progress.json
