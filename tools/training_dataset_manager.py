@@ -12,7 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from collections import Counter
 import pandas as pd
-
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 class TrainingDatasetManager:
     def __init__(self,
                  train_dir="image_crawl/train_images",
@@ -134,7 +135,7 @@ class TrainingDatasetManager:
     def update_character_mapping(self, vocabulary):
         """Update character mapping với vocabulary mới"""
         print("\nUpdating character mapping...")
-
+        vocabulary = set(vocabulary) if not isinstance(vocabulary, set) else vocabulary
         # Load existing mapping
         existing_mapping = self._load_existing_mapping()
         existing_vocab = set(existing_mapping.values()) if existing_mapping else set()
@@ -257,25 +258,29 @@ class TrainingDatasetManager:
     def generate_training_report(self, stats, train_count, test_count):
         """Generate training preparation report"""
         report = f"""
-=== Training Dataset Preparation Report ===
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        === Training Dataset Preparation Report ===
+        Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-Dataset Statistics:
-- Total images: {stats['total_images']}
-- Unique labels: {stats['unique_labels']}
-- Vocabulary size: {len(stats['vocabulary'])}
-- Characters: {''.join(sorted(stats['vocabulary']))}
+        Dataset Statistics:
+        - Total images: {stats['total_images']}
+        - Unique labels: {stats['unique_labels']}
+        - Vocabulary size: {len(stats['vocabulary'])}
+        - Characters: {''.join(sorted(stats['vocabulary']))}
 
-Dataset Split:
-- Training images: {train_count}
-- Test images: {test_count}
-- Test ratio: {test_count/(train_count+test_count)*100:.1f}%
+        Dataset Split:
+        - Training images: {train_count}
+        - Test images: {test_count}
+        - Test ratio: {test_count/(train_count+test_count)*100:.1f}%
 
-Top Character Frequencies:
-"""
-
+        Top Character Frequencies:
+        """
+        # Calculate total characters for percentage
+        total_chars = sum(stats['character_frequency'].values())
+        
         for char, count in stats['character_frequency'].most_common(10):
-            report += f"- '{char}': {count} times ({count/len(''.join([''] * stats['total_images']))*100:.1f}%)\n"
+            # report += f"- '{char}': {count} times ({count/len(''.join([''] * stats['total_images']))*100:.1f}%)\n"
+            percentage = (count/total_chars*100) if total_chars > 0 else 0
+            report += f"- '{char}': {count} times ({percentage:.1f}%)\n"
 
         # Save report
         report_file = Path("image_crawl/training_preparation_report.txt")

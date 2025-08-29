@@ -73,6 +73,9 @@ def get_model_checkpoint():
         path_file = "/".join(os.path.abspath(__file__).split("/")[:-1])
     
     model = CRNN(25, 256) # fix size dictionary is 25
-    model.load_state_dict(torch.load(path_file + "/save/best.bin", map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda')))
+    model.load_state_dict(torch.load(path_file + "/save/best.bin", 
+                                     map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
+                                     weights_only=True
+                                     ))
     model.eval()
     return model

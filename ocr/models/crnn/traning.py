@@ -153,20 +153,58 @@ def get_training(debug: bool = True):
     idx2char   = {k:v for k,v in enumerate(vocabulary, start=0)}
     idx2char_checkpoint = read_json_file()
     
-    vocal_old = idx2char_checkpoint.keys()
-    vocal_new = idx2char.keys()
-    vocal_combine = vocal_old
-    for vol in vocal_new:
-        if vol not in vocal_old:
-            vocal_combine.append(vol)
-    if len(vocal_combine) != len(vocal_old):
-        if debug == False:
-            create_mapping_char(idx2char)
-        print("Create new mapping char")
-        idx2char = {v:k for k,v in enumerate(vocal_combine, start=0)}
+    # Convert to sets for easier comparison
+    current_vocab = set(idx2char.values())
+    checkpoint_vocab = set(idx2char_checkpoint.values())
     
-    char2idx   = {v:k for k,v in idx2char.items()}
-    num_chars  = len(char2idx)
+    # Find new characters
+    new_characters = current_vocab - checkpoint_vocab
+    removed_characters = checkpoint_vocab - current_vocab
+    
+    if debug:
+        print(f"\n=== Vocabulary Analysis ===")
+        print(f"Checkpoint vocabulary size: {len(checkpoint_vocab)}")
+        print(f"Current dataset vocabulary size: {len(current_vocab)}")
+        print(f"Checkpoint characters: {''.join(sorted(checkpoint_vocab))}")
+        print(f"Current dataset characters: {''.join(sorted(current_vocab))}")
+        
+        if new_characters:
+            print(f"\n🆕 NEW CHARACTERS FOUND: {new_characters}")
+            print(f"New characters: {''.join(sorted(new_characters))}")
+        else:
+            print("\n✅ No new characters found")
+            
+        # if removed_characters:
+        #     print(f"\n🗑️ REMOVED CHARACTERS: {removed_characters}")
+        #     print(f"Removed characters: {''.join(sorted(removed_characters))}")
+        # else:
+        #     print("\n✅ No characters removed")
+    
+    # Option 1: Use only checkpoint vocabulary (recommended)
+    if new_characters and debug:
+        print(f"\n⚠️ WARNING: Found {len(new_characters)} new characters!")
+        print("Options:")
+        print("1. Use only checkpoint vocabulary (recommended)")
+        print("2. Expand vocabulary and retrain from scratch")
+        
+        # Validate dataset against checkpoint vocabulary
+        invalid_labels = []
+        for label in label_fns_train + label_fns_test:
+            if not set(label).issubset(checkpoint_vocab):
+                invalid_chars = set(label) - checkpoint_vocab
+                invalid_labels.append((label, invalid_chars))
+        
+        if invalid_labels:
+            print(f"\n❌ Found {len(invalid_labels)} labels with invalid characters:")
+            for label, chars in invalid_labels[:10]:  # Show first 10
+                print(f"  '{label}' contains: {chars}")
+            if len(invalid_labels) > 10:
+                print(f"  ... and {len(invalid_labels) - 10} more")
+    
+    # Use checkpoint vocabulary to maintain model compatibility
+    idx2char = idx2char.copy()
+    char2idx = {v: k for k, v in idx2char.items()}
+    num_chars = len(char2idx)
     
     try:
         trainset = CAPTCHADatasetTraining(CFG.TRAIN_PATH, image_fns_train, label_fns_train, 'train') 
@@ -174,10 +212,14 @@ def get_training(debug: bool = True):
         train_loader = DataLoader(trainset, batch_size=CFG.BATCH_SIZE, num_workers=3, shuffle=True)
         test_loader = DataLoader(testset, batch_size=CFG.BATCH_SIZE, num_workers=3, shuffle=False)
 
-        crnn = CRNN(num_chars, rnn_hidden_size=CFG.RNN_HIDDEN_SIZE)
+        crnn = CRNN(num_chars=num_chars, rnn_hidden_size=CFG.RNN_HIDDEN_SIZE)
         crnn.apply(weights_init)
         crnn = crnn.to(DEVICE)
-        crnn.load_state_dict(torch.load(path_file + "/save/best.bin", map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda')))
+        if not new_characters:
+            crnn.load_state_dict(torch.load(path_file + "/save/best.bin", 
+                                            map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
+                                            weights_only=True
+                                            ))
         criterion = nn.CTCLoss(blank=0)
         optimizer = optim.Adam(crnn.parameters(), lr=CFG.LR, weight_decay=CFG.WEIGHT_DECAY)
         lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, patience=5)
