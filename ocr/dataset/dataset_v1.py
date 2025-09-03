@@ -11,41 +11,30 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 
 def preprocess(image):
-    kernel = np.array([
-        [0, 0, 0, 0, 0],
-        [0, 0, 1, 0, 0],
-        [0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 0],
-        [0, 0, 0, 0, 0],
-    ], dtype=np.uint8)
-    closed = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
-    inverted = cv2.bitwise_not(closed)
-    _, thresh = cv2.threshold(inverted, 120, 255, cv2.THRESH_BINARY_INV)
-    thresh = np.array(thresh, dtype=np.float32)
-    thresh /= 255
-
-    kernel = np.array([
-        [0, 0, 0, 0, 0],
-        [0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 0],
-    ], dtype=np.uint8)
-    closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+    """
+    Adaptive preprocessing that handles different image conditions
+    """
+    # Convert to grayscale if needed
+    if len(image.shape) > 2:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
-    kernel = np.array([
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-    ], dtype=np.uint8)
-    opened = cv2.morphologyEx(closed, cv2.MORPH_OPEN, kernel)
-    inverted = cv2.bitwise_not(opened)
-    _, thresh = cv2.threshold(inverted, 120, 255, cv2.THRESH_BINARY_INV)
-    thresh /= 255
-    return thresh
-
+    # Check if inversion is needed (dark text on light background)
+    # Compute mean pixel value in the center region where text likely exists
+    h, w = image.shape
+    center_region = image[h//4:3*h//4, w//4:3*w//4]
+    mean_value = np.mean(center_region)
+    
+    # If mean is high (light background), invert
+    if mean_value > 127:
+        image = 255 - image
+    
+    # Apply Otsu's threshold (automatically finds optimal threshold)
+    _, binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    # Normalize
+    binary = binary.astype(np.float32) / 255.0
+    
+    return binary
 class CAPTCHADataset(Dataset):
     def __init__(self, data_dir, image_fns):
         self.data_dir = data_dir
@@ -73,10 +62,12 @@ class CAPTCHADataset(Dataset):
         return transform_ops(image)
     
 class CAPTCHADatasetTraining(Dataset):
-    def __init__(self, data_dir, image_fns, label_fns, type = "train"):
+    def __init__(self, data_dir, image_fns, label_fns, type = "train", target_size=(50, 140), preprocess = True):
         self.data_dir  = data_dir
         self.image_fns = image_fns
         self.label_fns = label_fns
+        self.target_height, self.target_width = target_size 
+        self.preprocess = preprocess
         self.type      = type
         
     def __len__(self):
@@ -88,22 +79,34 @@ class CAPTCHADatasetTraining(Dataset):
         image_fp = os.path.join(self.data_dir, image_fn)
         image = cv2.imread(image_fp, cv2.IMREAD_UNCHANGED)
         
+        if image is None:
+            print(f"Skipping corrupted file: {image_fp}")
+            return self.__getitem__((index + 1) % len(self.label_fns))  # Load the next image
+        
         if len(image.shape) > 2:
             image = image[:,:,-1]
         
         image = 255 - image
-        image = preprocess(image)
-
+        if self.preprocess:
+            image = preprocess(image)
         image = self.transform(image)
-        text = self.label_fns[index]
-        return image, text
+        return image, self.label_fns[index]
     
     def transform(self, image):
-        
         transform_ops = transforms.Compose([
-            transforms.ToTensor(),
+        # transforms.ToPILImage(),  # Convert NumPy array to PIL Image
+        # transforms.Resize((64, 256), interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.ToTensor(),  # Convert to PyTorch tensor
+        transforms.Normalize(mean=[0.5], std=[0.5])  # Normalize to [-1, 1]
         ])
         return transform_ops(image)
+    
+    # def transform(self, image):
+        
+    #     transform_ops = transforms.Compose([
+    #         transforms.ToTensor(),
+    #     ])
+    #     return transform_ops(image)
 
 # from training dataset
 def read_json_file():
