@@ -1,21 +1,22 @@
 import os
+import cv2
+import yaml
 import glob
 import string
 import platform
-from PIL import Image
-import multiprocessing as mp
-from typing import List, Tuple
-
-import cv2
-import yaml
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+import matplotlib.pyplot as plt
+
 import torch
 import torch.nn as nn
-import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import torch.optim as optim
+
+from PIL import Image
+from tqdm import tqdm
+from typing import List, Tuple
+import multiprocessing as mp
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from torchvision.models import resnet18
@@ -123,7 +124,11 @@ def decode_predictions(text_batch_logits, idx2char, blank_idx=0):
             # handle mapping keys that might be ints or strings
             ch = None
             if isinstance(idx2char, dict):
-                ch = idx2char.get(int(idx)) if int(idx) in idx2char else idx2char.get(str(int(idx)))
+                idx_key = int(idx)
+                if idx_key in idx2char:
+                    ch = idx2char[idx_key]
+                elif str(idx_key) in idx2char:
+                    ch = idx2char[str(idx_key)]
             if ch is None:
                 ch = "?"
             chars.append(ch)
@@ -131,7 +136,7 @@ def decode_predictions(text_batch_logits, idx2char, blank_idx=0):
     return text_batch_tokens_new
 
 class EarlyStopping:
-    def __init__(self, patience=7, min_delta=0, restore_best_weights=True):
+    def __init__(self, patience=10, min_delta=0, restore_best_weights=True):
         self.patience = patience
         self.min_delta = min_delta
         self.restore_best_weights = restore_best_weights
@@ -177,6 +182,7 @@ def validate_model(model, val_loader, criterion, char2idx, device, idx2char):
             
             # Get predictions for accuracy calculation
             text_batch_pred = decode_predictions(text_batch_logits.cpu(), idx2char)
+
             predictions.extend(text_batch_pred)
             actuals.extend(text_batch)
     
@@ -187,13 +193,11 @@ def validate_model(model, val_loader, criterion, char2idx, device, idx2char):
     return avg_val_loss, val_accuracy
 
 def get_training(debug: bool = True):
-    # Add device information at the start
-    print(f"🔧 Using device: {DEVICE}")
     if torch.cuda.is_available():
-        print(f"🚀 GPU: {torch.cuda.get_device_name(0)}")
-        print(f"💾 GPU Memory: {torch.cuda.get_device_properties(0).total_memory // 1024**3} GB")
+        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+        print(f"GPU Memory Available: {torch.cuda.get_device_properties(0).total_memory // 1024**3} GB")
     else:
-        print("⚠️  Using CPU - training will be slower")
+        print("GPU Not found. Using CPU - training will be slower")
     
     CFG = TrainConfig()
     
@@ -202,12 +206,12 @@ def get_training(debug: bool = True):
     
     trainset = CAPTCHADatasetTraining(CFG.TRAIN_PATH, image_fns_train, label_fns_train, 'train') 
     testset = CAPTCHADatasetTraining(CFG.TEST_PATH, image_fns_test, label_fns_test, 'test')
-    
-    for i in range(5):
-        image, label = trainset[i]
-        plt.imshow(image.squeeze(), cmap='gray')
-        plt.title(label)
-        plt.show()
+    if debug:
+        for i in range(5):
+            image, label = trainset[i]
+            plt.imshow(image.squeeze(), cmap='gray')
+            plt.title(label)
+            plt.show()
     
     if debug:
         print("test size: ", len(image_fns_test))
@@ -235,7 +239,7 @@ def get_training(debug: bool = True):
     removed_characters = checkpoint_vocab - current_vocab
     
     if debug:
-        print(f"\n=== Vocabulary Analysis ===")
+        print(f"\n=== Vocabulary Checking...===")
         print(f"Checkpoint vocabulary size: {len(checkpoint_vocab)}")
         print(f"Current dataset vocabulary size: {len(current_vocab)}")
         print(f"Checkpoint characters: {''.join(sorted(checkpoint_vocab))}")
@@ -246,33 +250,7 @@ def get_training(debug: bool = True):
             print(f"New characters: {''.join(sorted(new_characters))}")
         else:
             print("\n✅ No new characters found")
-            
-        # if removed_characters:
-        #     print(f"\n🗑️ REMOVED CHARACTERS: {removed_characters}")
-        #     print(f"Removed characters: {''.join(sorted(removed_characters))}")
-        # else:
-        #     print("\n✅ No characters removed")
 
-    # if new_characters and debug:
-    #     print(f"\n⚠️ WARNING: Found {len(new_characters)} new characters!")
-    #     print("Options:")
-    #     print("1. Use only checkpoint vocabulary (recommended)")
-    #     print("2. Expand vocabulary and retrain from scratch")
-        
-    #     # Validate dataset against checkpoint vocabulary
-    #     invalid_labels = []
-    #     for label in label_fns_train + label_fns_test:
-    #         if not set(label).issubset(checkpoint_vocab):
-    #             invalid_chars = set(label) - checkpoint_vocab
-    #             invalid_labels.append((label, invalid_chars))
-        
-    #     if invalid_labels:
-    #         print(f"\n❌ Found {len(invalid_labels)} labels with invalid characters:")
-    #         for label, chars in invalid_labels[:10]:  # Show first 10
-    #             print(f"  '{label}' contains: {chars}")
-    #         if len(invalid_labels) > 10:
-    #             print(f"  ... and {len(invalid_labels) - 10} more")
-    
     # Use current vocabulary to maintain model compatibility
     idx2char = idx2char.copy()
     char2idx = {v: k for k, v in idx2char.items()}
@@ -284,13 +262,29 @@ def get_training(debug: bool = True):
         val_size = len(trainset) - train_size
         train_subset, val_subset = torch.utils.data.random_split(trainset, [train_size, val_size])
         
-        train_loader = DataLoader(train_subset, batch_size=CFG.BATCH_SIZE, num_workers=0, shuffle=True)
-        val_loader = DataLoader(val_subset, batch_size=CFG.BATCH_SIZE, num_workers=0, shuffle=False)
-        test_loader = DataLoader(testset, batch_size=CFG.BATCH_SIZE, num_workers=0, shuffle=False)
+        train_loader = DataLoader(train_subset, 
+                                  batch_size=CFG.BATCH_SIZE, 
+                                  num_workers=2, 
+                                  persistent_workers=True, 
+                                  pin_memory=True if torch.cuda.is_available() else False, 
+                                  shuffle=True
+                                  )
+        val_loader = DataLoader(val_subset, 
+                                batch_size=CFG.BATCH_SIZE, 
+                                num_workers=2, 
+                                persistent_workers=True, 
+                                pin_memory=True if torch.cuda.is_available() else False, 
+                                shuffle=False
+                                )
+        test_loader = DataLoader(testset, 
+                                 batch_size=CFG.BATCH_SIZE, 
+                                 num_workers=2, 
+                                 persistent_workers=True, 
+                                 pin_memory=True if torch.cuda.is_available() else False, 
+                                 shuffle=False
+                                 )
 
-        crnn = CRNN(vocab_size=num_chars, 
-                    # rnn_hidden_size=CFG.RNN_HIDDEN_SIZE
-                    )
+        crnn = CRNN(num_chars=num_chars, rnn_hidden_size=CFG.RNN_HIDDEN_SIZE)
         crnn.apply(weights_init)
         crnn = crnn.to(DEVICE)
 
@@ -310,7 +304,10 @@ def get_training(debug: bool = True):
         )
         
         # Initialize early stopping
-        early_stopping = EarlyStopping(patience=10, min_delta=0.001, restore_best_weights=True)
+        early_stopping = EarlyStopping(patience=CFG.EARLY_STOPPING_PATIENCE, 
+                                       min_delta=CFG.EARLY_STOPPING_MIN_DELTA, 
+                                       restore_best_weights=True
+                                       )
         
         epoch_losses = []
         val_losses = []
@@ -368,7 +365,7 @@ def get_training(debug: bool = True):
                 print(f"Best validation loss: {early_stopping.best_loss:.4f}")
                 
                 # Save the best model after early stopping is triggered
-                torch.save(crnn.state_dict(), path_file + f"/save/best_{early_stopping.best_loss:.4f}.bin")
+                torch.save(crnn.state_dict(), path_file + "/save/best.bin")
                 print(f"  💾 Saved best model (val_loss: {early_stopping.best_loss:.4f})")
                 break
         # # Save best model
@@ -395,9 +392,7 @@ def get_training(debug: bool = True):
         test_accuracy = accuracy_score(results_test['actual'], results_test['prediction_corrected'])
         
         print(f"Test Accuracy: {test_accuracy:.4f}")
-        print("✅ Training completed!")
-        
-        # Plot training history if debug mode
+        # Plot training history
         if debug:
             plt.figure(figsize=(15, 5))
             

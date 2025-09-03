@@ -234,26 +234,26 @@ class TrainingDatasetManager:
 
         return len(train_data), len(test_data)
 
-    # def backup_current_model(self):
-    #     """Backup model hiện tại trước khi train"""
-    #     print("\nBacking up current model...")
+    def backup_current_model(self):
+        """Backup model hiện tại trước khi train"""
+        print("\nBacking up current model...")
 
-    #     if not self.current_model_path.exists():
-    #         print("⚠️  No existing model found to backup")
-    #         return None
+        if not self.current_model_path.exists():
+            print("⚠️  No existing model found to backup")
+            return None
 
-    #     # Create backup filename với timestamp
-    #     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    #     backup_filename = f"best_backup_{timestamp}.bin"
-    #     backup_path = self.model_backup_dir / backup_filename
+        # Create backup filename với timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"best_backup_{timestamp}.bin"
+        backup_path = self.model_backup_dir / backup_filename
 
-    #     try:
-    #         shutil.copy2(self.current_model_path, backup_path)
-    #         print(f"✅ Model backed up to: {backup_path}")
-    #         return backup_path
-    #     except Exception as e:
-    #         print(f"❌ Error backing up model: {e}")
-    #         return None
+        try:
+            shutil.copy2(self.current_model_path, backup_path)
+            print(f"✅ Model backed up to: {backup_path}")
+            return backup_path
+        except Exception as e:
+            print(f"❌ Error backing up model: {e}")
+            return None
 
     def generate_training_report(self, stats, train_count, test_count):
         """Generate training preparation report"""
@@ -307,8 +307,8 @@ class TrainingDatasetManager:
         # 3. Update character mapping
         mapping = self.update_character_mapping(stats['vocabulary'])
 
-        # # 4. Backup current model
-        # backup_path = self.backup_current_model()
+        # 4. Backup current model
+        backup_path = self.backup_current_model()
 
         # 5. Create train/test split
         if not skip_split:

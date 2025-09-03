@@ -1,6 +1,8 @@
 TRAIN_PATH: "image_crawl/train_images"
 TEST_PATH: "image_crawl/test_images"
-# TEST_PATH: "D:/Downloads/VIRAC/VIRAC-OCR/image_crawl/sample/test_numbers_only"
+
+BEST_MODEL_PATH: "/ocr/models/crnn/save/best.bin"
+MAPPING_CHARACTER_PATH: "/ocr/dataset/mapping_char.json"
 
 RNN_HIDDEN_SIZE: 256
 ACC_THRESHOLD: 0.87

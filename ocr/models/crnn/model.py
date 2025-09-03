@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import resnet50, efficientnet_b4, mobilenet_v3_small
+from torchvision.models import resnet50, efficientnet_b4
 import os
 import platform
 
@@ -18,69 +18,81 @@ class AttentionModule(nn.Module):
         return context, attention_weights
 
 class CRNN(nn.Module):
-    def __init__(self, vocab_size, rnn_hidden_size=256, dropout=0.5, lstm_dropout=0.2):
-        super().__init__()
-        # self.vocab_size = vocab_size
-        # self.chars = chars
-        # self.char2idx, self.idx2char = self.char_idx()
+    def __init__(self, num_chars, rnn_hidden_size=256, dropout=0.1, use_attention=True):
+        super(CRNN, self).__init__()
+        self.num_chars = num_chars
+        self.rnn_hidden_size = rnn_hidden_size
+        self.dropout = dropout
+        self.use_attention = use_attention
+
+        base = efficientnet_b4(weights=None)
+        # Modify first conv layer for grayscale
+        base.features[0][0] = nn.Conv2d(1, 48, kernel_size=3, stride=1, padding=1, bias=False)
+        self.cnn_p1 = nn.Sequential(*list(base.features[:6]))  # First 6 layers
         
-        self.convlayer = nn.Sequential(
-            nn.Conv2d(1, 64, 3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
+        # Conv layer with residual connections
+        self.cnn_p2 = nn.Sequential(
+            nn.Conv2d(160, 512, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout),
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
             
-            nn.Conv2d(64, 64, 3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, 3, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-
-            nn.Conv2d(64, 128, 3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, 3, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-
-            nn.Conv2d(128, 256, 3, padding=1),
+            nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(256, 256, 3, stride=2, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-
-            nn.Conv2d(256, 512, 3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Conv2d(512, 512, 3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Dropout(0.4),
-
-            nn.Conv2d(512, 512, 3, stride=(2, 1), padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout),
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+            
+            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout),
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
         )
+        # Adaptive pooling to handle variable heights
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, None))
+            
+        self.rnn1 = nn.LSTM(input_size=128, 
+                            hidden_size=128,
+                            bidirectional=True, 
+                            batch_first=True,
+                            dropout=dropout if dropout > 0 else 0)
         
-        self.mapSeq = nn.Linear(512 * 2, 256)
-
-        self.lstm_0 = nn.LSTM(256, 256, bidirectional=True, dropout=lstm_dropout)
-        self.lstm_1 = nn.LSTM(512, 256, bidirectional=True, dropout=lstm_dropout)
-
-        self.out = nn.Linear(512, vocab_size)
+        self.rnn2 = nn.LSTM(input_size=128 * 2, 
+                            hidden_size=128,
+                            bidirectional=True, 
+                            batch_first=True,
+                            dropout=dropout if dropout > 0 else 0)
+        
+        # Optional
+        if self.use_attention:
+            self.attention = AttentionModule(rnn_hidden_size)
+        # Ouput
+        self.output = nn.Linear(256, num_chars)
         
     def forward(self, x):
-        x = self.convlayer(x)
-        x = x.permute(3, 0, 1, 2)
-        x = x.view(x.size(0), x.size(1), -1)
-        x = self.mapSeq(x)
-
-        x, _ = self.lstm_0(x)
-        x, _ = self.lstm_1(x)
-
-        x = self.out(x)
-        return x
+        x = self.cnn_p1(x)
+        x = self.cnn_p2(x)
+        x = self.adaptive_pool(x)  # (B, C=256, H=1, W=time)
+        
+        # Reshape for RNN: (B, W, C)
+        x = x.squeeze(2).permute(0, 2, 1)  # (B, time, 256)
+        
+        # RNN layers 
+        rnn1_out, _ = self.rnn1(x)
+        rnn2_out, _ = self.rnn2(rnn1_out)
+        
+        # Add residual connection
+        if rnn1_out.size(-1) == rnn2_out.size(-1):
+            rnn_out = rnn1_out + rnn2_out
+        else:
+            rnn_out = rnn2_out
+        
+        output = self.output(rnn_out)
+        # Permute for CTC loss: (time, batch, classes)
+        output = output.permute(1, 0, 2)
+        return output
     
 def get_model_checkpoint():
     if platform.system() == "Windows":

@@ -14,7 +14,7 @@ def preprocess(image):
     """
     Adaptive preprocessing that handles different image conditions
     """
-    # Convert to grayscale if needed
+    # Convert to grayscale
     if len(image.shape) > 2:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
@@ -33,7 +33,6 @@ def preprocess(image):
     
     # Normalize
     binary = binary.astype(np.float32) / 255.0
-    
     return binary
 class CAPTCHADataset(Dataset):
     def __init__(self, data_dir, image_fns):
@@ -62,7 +61,7 @@ class CAPTCHADataset(Dataset):
         return transform_ops(image)
     
 class CAPTCHADatasetTraining(Dataset):
-    def __init__(self, data_dir, image_fns, label_fns, type = "train", target_size=(50, 140), preprocess = True):
+    def __init__(self, data_dir, image_fns, label_fns, type = "train", target_size=(50, 130), preprocess = True):
         self.data_dir  = data_dir
         self.image_fns = image_fns
         self.label_fns = label_fns
@@ -90,23 +89,18 @@ class CAPTCHADatasetTraining(Dataset):
         if self.preprocess:
             image = preprocess(image)
         image = self.transform(image)
-        return image, self.label_fns[index]
+        
+        label = str(self.label_fns[index])
+        return image, label
     
     def transform(self, image):
         transform_ops = transforms.Compose([
         # transforms.ToPILImage(),  # Convert NumPy array to PIL Image
-        # transforms.Resize((64, 256), interpolation=transforms.InterpolationMode.BICUBIC),
+        # transforms.Resize((self.target_height, self.target_width), interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.ToTensor(),  # Convert to PyTorch tensor
         transforms.Normalize(mean=[0.5], std=[0.5])  # Normalize to [-1, 1]
         ])
         return transform_ops(image)
-    
-    # def transform(self, image):
-        
-    #     transform_ops = transforms.Compose([
-    #         transforms.ToTensor(),
-    #     ])
-    #     return transform_ops(image)
 
 # from training dataset
 def read_json_file():

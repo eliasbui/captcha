@@ -23,7 +23,6 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def test_model_accuracy():
     """Test accuracy of existing best.bin model"""
     print("🧪 Testing Model Accuracy...")
-    
     # Load config
     CFG = TrainConfig()
     
@@ -33,15 +32,13 @@ def test_model_accuracy():
     else:
         path_file = "/".join(os.path.abspath(__file__).split("/")[:-2])
     
-    # model_path = path_file + "/ocr/models/crnn/save/best.bin"
-    model_path = path_file + r'\ocr\models\crnn\save\best_0.74_0.55.bin'
-    
+    model_path = path_file + CFG.BEST_MODEL_PATH
     if not os.path.exists(model_path):
-        print(f"❌ Model file not found: {model_path}")
-        return
+        print(f"❌ Saved model not found: {model_path}")
+        raise
     
     # Load character mapping from checkpoint file location
-    mapping_path = path_file + "/ocr/dataset/mapping_char.json"
+    mapping_path = path_file + CFG.MAPPING_CHARACTER_PATH
     
     try:
         # Use the exact same mapping that was used to train the model
@@ -57,23 +54,25 @@ def test_model_accuracy():
         print(f"Checkpoint vocabulary size: {checkpoint_vocab_size}")
         print(f"Characters: {''.join(sorted(idx2char.values()))}")
         
-                # Get test dataset
+        # Get testset
         image_fns_test, label_fns_test = get_test_set(CFG)
         print(f"Test dataset size: {len(image_fns_test)}")
-        # Create test dataset with filtered data
+        # Filtered data
         testset = CAPTCHADatasetTraining(CFG.TEST_PATH, image_fns_test, label_fns_test, 'test')
-        test_loader = DataLoader(testset, batch_size=16, num_workers=1, shuffle=False)
+        test_loader = DataLoader(testset, batch_size=CFG.BATCH_SIZE, num_workers=1, shuffle=False)
         
-        # Initialize model with EXACT checkpoint vocabulary size
-        crnn = CRNN(num_chars=checkpoint_vocab_size, rnn_hidden_size=256)
+        # Initialize model 
+        crnn = CRNN(num_chars=checkpoint_vocab_size, rnn_hidden_size=CFG.RNN_HIDDEN_SIZE)
         crnn.load_state_dict(torch.load(model_path, 
                                        map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
+                                       weights_only=True
                                        ))
         crnn = crnn.to(DEVICE)
         print("✅ Model loaded successfully")
         # Run inference
         results_test = pd.DataFrame(columns=['actual', 'prediction'])
         print("🔍 Running inference on test set...")
+        
         crnn.eval()
         with torch.no_grad():
             for image_batch, text_batch in tqdm(test_loader, leave=True):
@@ -85,16 +84,12 @@ def test_model_accuracy():
                 results_test = pd.concat([results_test, df])
         
         results_test = results_test.reset_index(drop=True)
-        
-        # Calculate accuracy
         raw_accuracy = accuracy_score(results_test['actual'], results_test['prediction'])
-        
-        # Display results
+
         print("\n=== Test Results ===")
         print(f"📊 Total test samples: {len(results_test)}")
         print(f"🎯 Raw accuracy: {raw_accuracy:.4f} ({raw_accuracy*100:.2f}%)")
-        
-        # Show some examples
+
         print("\n=== Sample Predictions ===")
         sample_results = results_test.head(10)
         for idx, row in sample_results.iterrows():
