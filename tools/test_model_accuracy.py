@@ -59,7 +59,7 @@ def test_model_accuracy():
         print(f"Test dataset size: {len(image_fns_test)}")
         # Filtered data
         testset = CAPTCHADatasetTraining(CFG.TEST_PATH, image_fns_test, label_fns_test, 'test')
-        test_loader = DataLoader(testset, batch_size=CFG.BATCH_SIZE, num_workers=1, shuffle=False)
+        test_loader = DataLoader(testset, batch_size=CFG.BATCH_SI ZE, num_workers=1, shuffle=False)
         
         # Initialize model 
         crnn = CRNN(num_chars=checkpoint_vocab_size, rnn_hidden_size=CFG.RNN_HIDDEN_SIZE)

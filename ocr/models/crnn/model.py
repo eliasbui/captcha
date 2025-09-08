@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet50, efficientnet_b4
+from ocr.dataset.dataset_v1 import CAPTCHADatasetTraining, read_json_file
 import os
 import platform
 
@@ -100,7 +101,21 @@ def get_model_checkpoint():
     else:
         path_file = "/".join(os.path.abspath(__file__).split("/")[:-1])
     
-    model = CRNN(25, 256) # fix size dictionary is 25
+    # Load character mapping from checkpoint file location
+    mapping_path = path_file + "/ocr/dataset/mapping_char.json"
+    
+    try:
+        # Use the exact same mapping that was used to train the model
+        if os.path.exists(mapping_path):
+            idx2char = read_json_file()  # This should load from mapping_char.json
+        else:
+            print(f"❌ Mapping file not found: {mapping_path}")
+            return
+            
+        char2idx = {v: k for k, v in idx2char.items()}
+        checkpoint_vocab_size = len(idx2char)
+    
+    model = CRNN(checkpoint_vocab_size, 256)
     model.load_state_dict(torch.load(path_file + "/save/best.bin", 
                                      map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
                                      weights_only=True

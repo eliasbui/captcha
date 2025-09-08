@@ -252,7 +252,7 @@ def get_training(debug: bool = True):
             print("\n✅ No new characters found")
 
     # Use current vocabulary to maintain model compatibility
-    idx2char = idx2char.copy()
+    idx2char = idx2char_checkpoint.copy()
     char2idx = {v: k for k, v in idx2char.items()}
     num_chars = len(char2idx)
     
