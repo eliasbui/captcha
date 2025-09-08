@@ -102,19 +102,18 @@ def get_model_checkpoint():
         path_file = "/".join(os.path.abspath(__file__).split("/")[:-1])
     
     # Load character mapping from checkpoint file location
-    mapping_path = path_file + "/ocr/dataset/mapping_char.json"
+    mapping_path = path_file + "/dataset/mapping_char.json"
     
     try:
         # Use the exact same mapping that was used to train the model
         if os.path.exists(mapping_path):
             idx2char = read_json_file()  # This should load from mapping_char.json
-        else:
-            print(f"❌ Mapping file not found: {mapping_path}")
-            return
-            
+    except Exception as e:
+        print(f"❌ Mapping file not found: {mapping_path}: {e}")
+        raise
+    finally:
         char2idx = {v: k for k, v in idx2char.items()}
         checkpoint_vocab_size = len(idx2char)
-    finally:
         model = CRNN(checkpoint_vocab_size, 256)
         model.load_state_dict(torch.load(path_file + "/save/best.bin", 
                                         map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
