@@ -114,11 +114,11 @@ def get_model_checkpoint():
             
         char2idx = {v: k for k, v in idx2char.items()}
         checkpoint_vocab_size = len(idx2char)
-    
-    model = CRNN(checkpoint_vocab_size, 256)
-    model.load_state_dict(torch.load(path_file + "/save/best.bin", 
-                                     map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
-                                     weights_only=True
-                                     ))
-    model.eval()
+    finally:
+        model = CRNN(checkpoint_vocab_size, 256)
+        model.load_state_dict(torch.load(path_file + "/save/best.bin", 
+                                        map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
+                                        weights_only=True
+                                        ))
+        model.eval()
     return model
