@@ -108,10 +108,6 @@ def get_model_checkpoint():
         # Use the exact same mapping that was used to train the model
         if os.path.exists(mapping_path):
             idx2char = read_json_file()  # This should load from mapping_char.json
-    except Exception as e:
-        print(f"❌ Mapping file not found: {mapping_path}: {e}")
-        raise
-    finally:
         char2idx = {v: k for k, v in idx2char.items()}
         checkpoint_vocab_size = len(idx2char)
         model = CRNN(checkpoint_vocab_size, 256)
@@ -120,4 +116,7 @@ def get_model_checkpoint():
                                         weights_only=True
                                         ))
         model.eval()
+    except Exception as e:
+        print("❌ Error LOADING model.")
+        raise
     return model
