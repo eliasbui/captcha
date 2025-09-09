@@ -73,7 +73,9 @@ class CaptchaLabelingTool:
         for ext in extensions:
             files.extend(list(self.input_dir.glob(f"*{ext}")))
             files.extend(list(self.input_dir.glob(f"*{ext.upper()}")))
-        return sorted(files)
+        unique = list(set(files))
+        unique.sort()
+        return unique
 
     def _load_progress(self):
         """Load labeling progress từ JSON file"""
@@ -329,7 +331,8 @@ class CaptchaLabelingTool:
 
             # Tự động chuyển sang ảnh tiếp theo nếu được bật
             if self.auto_next_var.get():
-                self.root.after(100, self.next_image)  # Delay ngắn 100ms để user thấy status message
+                # self.root.after(100, self.next_image)  # Delay ngắn 100ms để user thấy status message
+                self.next_image()
 
         except Exception as e:
             messagebox.showerror("Error", f"Cannot save file: {e}")

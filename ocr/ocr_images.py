@@ -64,8 +64,6 @@ class OCRImages:
             for _, image_batch in enumerate(loader_data):
                 image_batch = image_batch.to(self.cfg.device)
                 logits = self.model(image_batch)
-                
-                # Use the new decode_predictions function for post-processing
                 texts = decode_predictions(logits.cpu(), self.idx2char, blank_idx=0)
                 results.extend(texts)
                 

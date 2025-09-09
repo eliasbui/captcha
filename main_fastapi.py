@@ -97,17 +97,6 @@ async def read_item(item: RequestImageQualification):
         png_buffer     = BytesIO(content_buffer)
         png_image      = Image.open(png_buffer)
         pixel_data     = np.array(png_image)[:,:,3]
-
-        # Debug: Check image properties
-        print(f"Image mode: {png_image.mode}")
-        print(f"Image size: {png_image.size}")
-        print(f"Image format: {png_image.format}")
-        print(f"Image shape: {pixel_data.shape}")
-        
-        pixel_data     = np.array(png_image)[:,:,3]
-        print(f"Alpha channel shape: {pixel_data.shape}")
-        print(f"Alpha channel min/max: {pixel_data.min()}/{pixel_data.max()}")
-        print(f"Alpha channel unique values: {np.unique(pixel_data)}")
         
         image_path     = f"./image_crawl/ocr_images/{image_id}.png"
         list_image.append(pixel_data)
@@ -194,8 +183,8 @@ async def read_recap_item(item: RequestImageCaptureQualification):
     
     # preprocess image 
     pixel_data     = np.array(png_image)
-    pixel_data     = cv2.cvtColor(pixel_data, cv2.COLOR_BGR2GRAY)
-    pixel_data     = 255 - pixel_data
+    # pixel_data     = cv2.cvtColor(pixel_data, cv2.COLOR_BGR2GRAY)
+    # pixel_data     = 255 - pixel_data
     content_buffer = cv2.imencode(".png", pixel_data)[1].tobytes()
     image_path     = f"./image_crawl/ocr_images/{image_id}.png"
     

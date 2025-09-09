@@ -14,6 +14,8 @@ from collections import Counter
 import pandas as pd
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from torch_config import setup_torch_optimizations
 class TrainingDatasetManager:
     def __init__(self,
                  train_dir="image_crawl/train_images",
@@ -50,6 +52,7 @@ class TrainingDatasetManager:
         for ext in image_extensions:
             image_files.extend(list(self.train_dir.glob(f"*{ext}")))
             image_files.extend(list(self.train_dir.glob(f"*{ext.upper()}")))
+        image_files = list(set(image_files))
 
         # Parse labels từ filenames
         valid_files = []
@@ -349,6 +352,7 @@ class TrainingDatasetManager:
             return False
 
 def main():
+    setup_torch_optimizations()
     parser = argparse.ArgumentParser(description='Prepare dataset and manage training process')
     parser.add_argument('--train-dir', type=str, default='image_crawl/train_images',
                        help='Training images directory')
