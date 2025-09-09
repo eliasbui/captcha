@@ -1,4 +1,4 @@
-FROM python:3.12.4
+FROM python:3.10.18
 
 ENV DEBIAN_FRONTEND=noninteractive
 
