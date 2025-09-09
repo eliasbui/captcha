@@ -85,7 +85,7 @@ class CAPTCHADatasetTraining(Dataset):
         if len(image.shape) > 2:
             image = image[:,:,-1]
         
-        image = 255 - image
+        # image = 255 - image
         if self.preprocess:
             image = preprocess(image)
         image = self.transform(image)
@@ -99,6 +99,39 @@ class CAPTCHADatasetTraining(Dataset):
         # transforms.Resize((self.target_height, self.target_width), interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.ToTensor(),  # Convert to PyTorch tensor
         transforms.Normalize(mean=[0.5], std=[0.5])  # Normalize to [-1, 1]
+        ])
+        return transform_ops(image)
+
+class CAPTCHADatasetInferenceV1(Dataset):
+    def __init__(self, image_buffers):
+        self.image_buffers = image_buffers
+        
+    def __len__(self):
+        return len(self.image_buffers)
+    
+    def __getitem__(self, index):
+        image_content = self.image_buffers[index]
+        # png_buffer = BytesIO(image_content)
+        # png_image = Image.open(png_buffer)
+        # image = np.array(png_image)
+
+        # Use cv2.imdecode to match training processing
+        nparr = np.frombuffer(image_content, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
+        
+        if len(image.shape) >= 3:
+            image = image[:,:,-1]
+
+        # image = 255 - image
+        image = preprocess(image)
+
+        image = self.transform(image)
+        return image
+    
+    def transform(self, image):
+        transform_ops = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])  # Add the missing normalization
         ])
         return transform_ops(image)
 
@@ -177,30 +210,3 @@ def post_process_v1(text_batch_logits):
         text_batch_tokens_new.append(text)
     return text_batch_tokens_new    
 
-class CAPTCHADatasetInferenceV1(Dataset):
-    def __init__(self, image_buffers):
-        self.image_buffers = image_buffers
-        
-    def __len__(self):
-        return len(self.image_buffers)
-    
-    def __getitem__(self, index):
-        image_content = self.image_buffers[index]
-        png_buffer = BytesIO(image_content)
-        png_image = Image.open(png_buffer)
-        image = np.array(png_image)
-        
-        if len(image.shape) >= 3:
-            image = image[:,:,-1]
-
-        image = 255 - image
-        image = preprocess(image)
-
-        image = self.transform(image)
-        return image
-    
-    def transform(self, image):
-        transform_ops = transforms.Compose([
-            transforms.ToTensor(),
-        ])
-        return transform_ops(image)

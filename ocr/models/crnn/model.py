@@ -101,20 +101,22 @@ def get_model_checkpoint():
     else:
         path_file = "/".join(os.path.abspath(__file__).split("/")[:-1])
     
-    # Load character mapping from checkpoint file location
-    mapping_path = path_file + "/dataset/mapping_char.json"
-    
     try:
         # Use the exact same mapping that was used to train the model
-        if os.path.exists(mapping_path):
-            idx2char = read_json_file()  # This should load from mapping_char.json
+        idx2char = read_json_file()  # This should load from mapping_char.json
         char2idx = {v: k for k, v in idx2char.items()}
         checkpoint_vocab_size = len(idx2char)
         model = CRNN(checkpoint_vocab_size, 256)
+        
+        # Determine device
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
         model.load_state_dict(torch.load(path_file + "/save/best.bin", 
-                                        map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda'),
+                                        map_location=device,
                                         weights_only=True
                                         ))
+        # Move model to the correct device
+        model = model.to(device)
         model.eval()
     except Exception as e:
         print("❌ Error LOADING model.")
