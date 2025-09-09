@@ -388,8 +388,7 @@ def get_training(debug: bool = True):
                 results_test = pd.concat([results_test, df])
         
         results_test = results_test.reset_index(drop=True)
-        results_test['prediction_corrected'] = results_test['prediction']
-        test_accuracy = accuracy_score(results_test['actual'], results_test['prediction_corrected'])
+        test_accuracy = accuracy_score(results_test['actual'], results_test['prediction'])
         
         print(f"Test Accuracy: {test_accuracy:.4f}")
         # Plot training history

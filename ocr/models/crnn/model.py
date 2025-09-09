@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import resnet50, efficientnet_b4
+from torchvision.models import efficientnet_b4
 from ocr.dataset.dataset_v1 import CAPTCHADatasetTraining, read_json_file
 import os
 import platform

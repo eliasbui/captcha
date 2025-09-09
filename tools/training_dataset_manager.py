@@ -308,7 +308,7 @@ class TrainingDatasetManager:
         stats = self.analyze_dataset(labels)
 
         # 3. Update character mapping
-        mapping = self.update_character_mapping(stats['vocabulary'])
+        # mapping = self.update_character_mapping(stats['vocabulary'])
 
         # 4. Backup current model
         backup_path = self.backup_current_model()
