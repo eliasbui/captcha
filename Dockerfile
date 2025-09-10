@@ -1,6 +1,7 @@
-FROM python:3.11.13
+FROM python:3.10.18
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV SETUPTOOLS_USE_DISTUTILS=stdlib
 
 RUN apt-get autoclean; apt-get update --allow-insecure-repositories; \
     apt-get install ffmpeg libsm6 libxext6 git gfortran libopenblas-dev \
