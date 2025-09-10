@@ -1,12 +1,11 @@
-FROM python:3.10.18
+FROM python:3.11.13
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get autoclean; apt-get update --allow-insecure-repositories; \
-    apt-get install -y ffmpeg libsm6 libxext6 git gfortran libopenblas-dev \
-    liblapack-dev zip build-essential libssl-dev libffi-dev gnupg \
-    python3-full && \
-    apt-get clean
+    apt-get install ffmpeg libsm6 libxext6 git gfortran libopenblas-dev \
+    liblapack-dev zip -y && apt-get install build-essential libssl-dev libffi-dev gnupg -y \
+    && apt-get clean
 
 COPY requirements.txt /requirements.txt
 
@@ -19,16 +18,12 @@ RUN pip3 install --upgrade certifi
 RUN pip3 install pyopenssl==24.2.1
 
 RUN printf "openssl_conf = openssl_init\n\
-\n\
 [openssl_init]\n\
 ssl_conf = ssl_sect\n\
-\n\
 [ssl_sect]\n\
 system_default = system_default_sect\n\
-\n\
 [system_default_sect]\n\
-Options = UnsafeLegacyRenegotiation\n\
-" > /openssl.cnf
+Options = UnsafeLegacyRenegotiation" > /openssl.cnf
 
 ENV OPENSSL_CONF=/openssl.cnf
 
