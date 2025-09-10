@@ -67,7 +67,5 @@ zope.event==5.0
 zope.interface==7.0.1
 torch==2.5.1
 torchvision==0.20.1
-torchaudio==2.5.1
-tensorflow<2.11
 pandas==1.5.1
 scikit-learn==1.5.1

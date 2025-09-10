@@ -3,9 +3,10 @@ FROM python:3.10.18
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get autoclean; apt-get update --allow-insecure-repositories; \
-    apt-get install ffmpeg libsm6 libxext6 git gfortran libopenblas-dev \
-    liblapack-dev zip -y && apt-get install build-essential libssl-dev libffi-dev gnupg -y \
-    && apt-get clean
+    apt-get install -y ffmpeg libsm6 libxext6 git gfortran libopenblas-dev \
+    liblapack-dev zip build-essential libssl-dev libffi-dev gnupg \
+    python3-full && \
+    apt-get clean
 
 COPY requirements.txt /requirements.txt
 
