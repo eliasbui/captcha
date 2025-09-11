@@ -1,0 +1,26 @@
+
+        === Training Dataset Preparation Report ===
+        Generated: 2025-09-09 16:52:36
+
+        Dataset Statistics:
+        - Total images: 852
+        - Unique labels: 852
+        - Vocabulary size: 23
+        - Characters: 2345678abcdefghkmnprwxy
+
+        Dataset Split:
+        - Training images: 852
+        - Test images: 152
+        - Test ratio: 15.1%
+
+        Top Character Frequencies:
+        - 'r': 236 times (5.5%)
+- 'g': 201 times (4.7%)
+- 'd': 198 times (4.6%)
+- 'k': 198 times (4.6%)
+- 'n': 196 times (4.6%)
+- 'a': 196 times (4.6%)
+- 'p': 191 times (4.5%)
+- '3': 188 times (4.4%)
+- 'm': 188 times (4.4%)
+- 'w': 185 times (4.3%)

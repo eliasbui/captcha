@@ -3,16 +3,19 @@
 Training Dataset Manager
 Quản lý và chuẩn bị dataset cho training OCR model
 """
-
-import os
-import json
-import shutil
-import argparse
 from datetime import datetime
 from pathlib import Path
 from collections import Counter
 import pandas as pd
+import random
+import argparse
+import shutil
+import json
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from torch_config import setup_torch_optimizations
 class TrainingDatasetManager:
     def __init__(self,
                  train_dir="image_crawl/train_images",
@@ -49,6 +52,7 @@ class TrainingDatasetManager:
         for ext in image_extensions:
             image_files.extend(list(self.train_dir.glob(f"*{ext}")))
             image_files.extend(list(self.train_dir.glob(f"*{ext.upper()}")))
+        image_files = list(set(image_files))
 
         # Parse labels từ filenames
         valid_files = []
@@ -57,7 +61,7 @@ class TrainingDatasetManager:
 
         for img_file in image_files:
             # Extract label từ filename (bỏ extension)
-            label = img_file.stem
+            label = img_file.stem.lower()
 
             # Remove numeric suffix nếu có (ví dụ: abc_001.png -> abc)
             if '_' in label and label.split('_')[-1].isdigit():
@@ -134,7 +138,7 @@ class TrainingDatasetManager:
     def update_character_mapping(self, vocabulary):
         """Update character mapping với vocabulary mới"""
         print("\nUpdating character mapping...")
-
+        vocabulary = set(vocabulary) if not isinstance(vocabulary, set) else vocabulary
         # Load existing mapping
         existing_mapping = self._load_existing_mapping()
         existing_vocab = set(existing_mapping.values()) if existing_mapping else set()
@@ -190,7 +194,6 @@ class TrainingDatasetManager:
         data = list(zip(image_files, labels))
 
         # Shuffle data
-        import random
         random.seed(42)  # For reproducibility
         random.shuffle(data)
 
@@ -257,25 +260,29 @@ class TrainingDatasetManager:
     def generate_training_report(self, stats, train_count, test_count):
         """Generate training preparation report"""
         report = f"""
-=== Training Dataset Preparation Report ===
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        === Training Dataset Preparation Report ===
+        Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-Dataset Statistics:
-- Total images: {stats['total_images']}
-- Unique labels: {stats['unique_labels']}
-- Vocabulary size: {len(stats['vocabulary'])}
-- Characters: {''.join(sorted(stats['vocabulary']))}
+        Dataset Statistics:
+        - Total images: {stats['total_images']}
+        - Unique labels: {stats['unique_labels']}
+        - Vocabulary size: {len(stats['vocabulary'])}
+        - Characters: {''.join(sorted(stats['vocabulary']))}
 
-Dataset Split:
-- Training images: {train_count}
-- Test images: {test_count}
-- Test ratio: {test_count/(train_count+test_count)*100:.1f}%
+        Dataset Split:
+        - Training images: {train_count}
+        - Test images: {test_count}
+        - Test ratio: {test_count/(train_count+test_count)*100:.1f}%
 
-Top Character Frequencies:
-"""
-
+        Top Character Frequencies:
+        """
+        # Calculate total characters for percentage
+        total_chars = sum(stats['character_frequency'].values())
+        
         for char, count in stats['character_frequency'].most_common(10):
-            report += f"- '{char}': {count} times ({count/len(''.join([''] * stats['total_images']))*100:.1f}%)\n"
+            # report += f"- '{char}': {count} times ({count/len(''.join([''] * stats['total_images']))*100:.1f}%)\n"
+            percentage = (count/total_chars*100) if total_chars > 0 else 0
+            report += f"- '{char}': {count} times ({percentage:.1f}%)\n"
 
         # Save report
         report_file = Path("image_crawl/training_preparation_report.txt")
@@ -300,7 +307,7 @@ Top Character Frequencies:
         stats = self.analyze_dataset(labels)
 
         # 3. Update character mapping
-        mapping = self.update_character_mapping(stats['vocabulary'])
+        # mapping = self.update_character_mapping(stats['vocabulary'])
 
         # 4. Backup current model
         backup_path = self.backup_current_model()
@@ -344,6 +351,7 @@ Top Character Frequencies:
             return False
 
 def main():
+    setup_torch_optimizations()
     parser = argparse.ArgumentParser(description='Prepare dataset and manage training process')
     parser.add_argument('--train-dir', type=str, default='image_crawl/train_images',
                        help='Training images directory')

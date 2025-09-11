@@ -1,70 +1,100 @@
+from torchvision.models import efficientnet_b4
 import torch
 import torch.nn as nn
-from torchvision.models import resnet50
-import os
+import torch.nn.functional as F
 import platform
+import os
 
-resnet = resnet50(weights=None)
-resnet.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+from ocr.dataset.dataset_v1 import read_json_file
+
+class AttentionModule(nn.Module):
+    def __init__(self, hidden_size):
+        super(AttentionModule, self).__init__()
+        self.hidden_size = hidden_size
+        self.attention = nn.Linear(hidden_size * 2, 1)
+        
+    def forward(self, rnn_outputs):
+        # rnn_outputs: (batch_size, seq_len, hidden_size * 2)
+        attention_weights = F.softmax(self.attention(rnn_outputs), dim=1)
+        context = torch.sum(attention_weights * rnn_outputs, dim=1)
+        return context, attention_weights
 
 class CRNN(nn.Module):
-    def __init__(self, num_chars, rnn_hidden_size=256, dropout=0.1):
-        
+    def __init__(self, num_chars, rnn_hidden_size=256, dropout=0.1, use_attention=True):
         super(CRNN, self).__init__()
         self.num_chars = num_chars
         self.rnn_hidden_size = rnn_hidden_size
         self.dropout = dropout
+        self.use_attention = use_attention
+
+        base = efficientnet_b4(weights=None)
+        # Modify first conv layer for grayscale
+        base.features[0][0] = nn.Conv2d(1, 48, kernel_size=3, stride=1, padding=1, bias=False)
+        self.cnn_p1 = nn.Sequential(*list(base.features[:6]))  # First 6 layers
         
-        # CNN Part 1
-        resnet_modules = list(resnet.children())[:-3]
-        self.cnn_p1 = nn.Sequential(*resnet_modules)
-        
-        # CNN Part 2
+        # Conv layer with residual connections
         self.cnn_p2 = nn.Sequential(
-            # if resnet 50 need to be change to 1024
-            nn.Conv2d(1024, 256, kernel_size=(3,6), stride=1, padding=1),
+            nn.Conv2d(160, 512, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout),
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+            
+            nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout),
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+            
+            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout),
+            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
         )
-        self.linear1 = nn.Linear(1024, 256)
-        
-        # RNN
-        self.rnn1 = nn.GRU(input_size=rnn_hidden_size, 
-                            hidden_size=rnn_hidden_size,
+        # Adaptive pooling to handle variable heights
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, None))
+            
+        self.rnn1 = nn.LSTM(input_size=128, 
+                            hidden_size=128,
                             bidirectional=True, 
-                            batch_first=True)
-        self.rnn2 = nn.GRU(input_size=rnn_hidden_size, 
-                            hidden_size=rnn_hidden_size,
+                            batch_first=True,
+                            dropout=dropout if dropout > 0 else 0)
+        
+        self.rnn2 = nn.LSTM(input_size=128 * 2, 
+                            hidden_size=128,
                             bidirectional=True, 
-                            batch_first=True)
-        self.linear2 = nn.Linear(self.rnn_hidden_size*2, num_chars)
+                            batch_first=True,
+                            dropout=dropout if dropout > 0 else 0)
         
+        # Optional
+        if self.use_attention:
+            self.attention = AttentionModule(rnn_hidden_size)
+        # Ouput
+        self.output = nn.Linear(256, num_chars)
         
-    def forward(self, batch):
+    def forward(self, x):
+        x = self.cnn_p1(x)
+        x = self.cnn_p2(x)
+        x = self.adaptive_pool(x)  # (B, C=256, H=1, W=time)
         
-        batch = self.cnn_p1(batch)
+        # Reshape for RNN: (B, W, C)
+        x = x.squeeze(2).permute(0, 2, 1)  # (B, time, 256)
         
-        batch = self.cnn_p2(batch) 
+        # RNN layers 
+        rnn1_out, _ = self.rnn1(x)
+        rnn2_out, _ = self.rnn2(rnn1_out)
         
-        batch = batch.permute(0, 3, 1, 2) 
-         
-        batch_size = batch.size(0)
-        T = batch.size(1)
-        batch = batch.view(batch_size, T, -1)
+        # Add residual connection
+        if rnn1_out.size(-1) == rnn2_out.size(-1):
+            rnn_out = rnn1_out + rnn2_out
+        else:
+            rnn_out = rnn2_out
         
-        batch = self.linear1(batch)
-        
-        batch, hidden = self.rnn1(batch)
-        feature_size = batch.size(2)
-        batch = batch[:, :, :feature_size//2] + batch[:, :, feature_size//2:]
-        
-        batch, hidden = self.rnn2(batch)
-        
-        batch = self.linear2(batch)
-        
-        batch = batch.permute(1, 0, 2)
-        
-        return batch
+        output = self.output(rnn_out)
+        # Permute for CTC loss: (time, batch, classes)
+        output = output.permute(1, 0, 2)
+        return output
     
 def get_model_checkpoint():
     if platform.system() == "Windows":
@@ -72,7 +102,24 @@ def get_model_checkpoint():
     else:
         path_file = "/".join(os.path.abspath(__file__).split("/")[:-1])
     
-    model = CRNN(25, 256) # fix size dictionary is 25
-    model.load_state_dict(torch.load(path_file + "/save/best.bin", map_location=torch.device('cpu' if not torch.cuda.is_available() else 'cuda')))
-    model.eval()
+    try:
+        # Use the exact same mapping that was used to train the model
+        idx2char = read_json_file()  # This should load from mapping_char.json
+        char2idx = {v: k for k, v in idx2char.items()}
+        checkpoint_vocab_size = len(idx2char)
+        model = CRNN(checkpoint_vocab_size, 256)
+        
+        # Determine device
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        model.load_state_dict(torch.load(path_file + "/save/best.bin", 
+                                        map_location=device,
+                                        weights_only=True
+                                        ))
+        # Move model to the correct device
+        model = model.to(device)
+        model.eval()
+    except Exception as e:
+        print("❌ Error LOADING model.")
+        raise
     return model

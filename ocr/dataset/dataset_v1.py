@@ -11,72 +11,37 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 
 def preprocess(image):
-    kernel = np.array([
-        [0, 0, 0, 0, 0],
-        [0, 0, 1, 0, 0],
-        [0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 0],
-        [0, 0, 0, 0, 0],
-    ], dtype=np.uint8)
-    closed = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
-    inverted = cv2.bitwise_not(closed)
-    _, thresh = cv2.threshold(inverted, 120, 255, cv2.THRESH_BINARY_INV)
-    thresh = np.array(thresh, dtype=np.float32)
-    thresh /= 255
-
-    kernel = np.array([
-        [0, 0, 0, 0, 0],
-        [0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 0],
-    ], dtype=np.uint8)
-    closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+    """
+    Adaptive preprocessing that handles different image conditions
+    """
+    # Convert to grayscale
+    if len(image.shape) > 2:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
-    kernel = np.array([
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-    ], dtype=np.uint8)
-    opened = cv2.morphologyEx(closed, cv2.MORPH_OPEN, kernel)
-    inverted = cv2.bitwise_not(opened)
-    _, thresh = cv2.threshold(inverted, 120, 255, cv2.THRESH_BINARY_INV)
-    thresh /= 255
-    return thresh
-
-class CAPTCHADataset(Dataset):
-    def __init__(self, data_dir, image_fns):
-        self.data_dir = data_dir
-        self.image_fns = image_fns
-        
-    def __len__(self):
-        return len(self.image_fns)
+    # Check if inversion is needed (dark text on light background)
+    # Compute mean pixel value in the center region where text likely exists
+    h, w = image.shape
+    center_region = image[h//4:3*h//4, w//4:3*w//4]
+    mean_value = np.mean(center_region)
     
-    def __getitem__(self, index):
-        image_fn = self.image_fns[index]
-        image_fp = os.path.join(self.data_dir, image_fn)
-        image = cv2.imread(image_fp, cv2.IMREAD_UNCHANGED)[:,:,3]
+    # If mean is high (light background), invert
+    if mean_value > 127:
         image = 255 - image
-        image = preprocess(image)
-
-        image = self.transform(image)
-        text = image_fn.split(".")[0]
-        return image, text
     
-    def transform(self, image):
-        
-        transform_ops = transforms.Compose([
-            transforms.ToTensor(),
-        ])
-        return transform_ops(image)
+    # Apply Otsu's threshold (automatically finds optimal threshold)
+    _, binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    # Normalize
+    binary = binary.astype(np.float32) / 255.0
+    return binary
     
 class CAPTCHADatasetTraining(Dataset):
-    def __init__(self, data_dir, image_fns, label_fns, type = "train"):
+    def __init__(self, data_dir, image_fns, label_fns, type = "train", target_size=(50, 130), preprocess = True):
         self.data_dir  = data_dir
         self.image_fns = image_fns
         self.label_fns = label_fns
+        self.target_height, self.target_width = target_size 
+        self.preprocess = preprocess
         self.type      = type
         
     def __len__(self):
@@ -88,20 +53,60 @@ class CAPTCHADatasetTraining(Dataset):
         image_fp = os.path.join(self.data_dir, image_fn)
         image = cv2.imread(image_fp, cv2.IMREAD_UNCHANGED)
         
+        if image is None:
+            print(f"Skipping corrupted file: {image_fp}")
+            return self.__getitem__((index + 1) % len(self.label_fns))  # Load the next image
+        
         if len(image.shape) > 2:
             image = image[:,:,-1]
         
-        image = 255 - image
+        # image = 255 - image
+        if self.preprocess:
+            image = preprocess(image)
+        image = self.transform(image)
+        
+        label = str(self.label_fns[index])
+        return image, label
+    
+    def transform(self, image):
+        transform_ops = transforms.Compose([
+        # transforms.ToPILImage(),  # Convert NumPy array to PIL Image
+        # transforms.Resize((self.target_height, self.target_width), interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.ToTensor(),  # Convert to PyTorch tensor
+        transforms.Normalize(mean=[0.5], std=[0.5])  # Normalize to [-1, 1]
+        ])
+        return transform_ops(image)
+
+class CAPTCHADatasetInferenceV1(Dataset):
+    def __init__(self, image_buffers):
+        self.image_buffers = image_buffers
+        
+    def __len__(self):
+        return len(self.image_buffers)
+    
+    def __getitem__(self, index):
+        image_content = self.image_buffers[index]
+        # png_buffer = BytesIO(image_content)
+        # png_image = Image.open(png_buffer)
+        # image = np.array(png_image)
+
+        # Use cv2.imdecode to match training processing
+        nparr = np.frombuffer(image_content, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
+        
+        if len(image.shape) >= 3:
+            image = image[:,:,-1]
+
+        # image = 255 - image
         image = preprocess(image)
 
         image = self.transform(image)
-        text = self.label_fns[index]
-        return image, text
+        return image
     
     def transform(self, image):
-        
         transform_ops = transforms.Compose([
             transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])  # Add the missing normalization
         ])
         return transform_ops(image)
 
@@ -141,6 +146,7 @@ def create_mapping_char(new_dict):
 idx2char = read_json_file()
 char2idx = {v:k for k,v in idx2char.items()}
 
+#=============== DEPRECATED ==================
 def remove_duplicates(text):
     if len(text) <= 5:
         letters = [text[i] for i in range(len(text))]
@@ -180,30 +186,3 @@ def post_process_v1(text_batch_logits):
         text_batch_tokens_new.append(text)
     return text_batch_tokens_new    
 
-class CAPTCHADatasetInferenceV1(Dataset):
-    def __init__(self, image_buffers):
-        self.image_buffers = image_buffers
-        
-    def __len__(self):
-        return len(self.image_buffers)
-    
-    def __getitem__(self, index):
-        image_content = self.image_buffers[index]
-        png_buffer = BytesIO(image_content)
-        png_image = Image.open(png_buffer)
-        image = np.array(png_image)
-        
-        if len(image.shape) >= 3:
-            image = image[:,:,-1]
-
-        image = 255 - image
-        image = preprocess(image)
-
-        image = self.transform(image)
-        return image
-    
-    def transform(self, image):
-        transform_ops = transforms.Compose([
-            transforms.ToTensor(),
-        ])
-        return transform_ops(image)
