@@ -1,24 +1,22 @@
+from urllib.request import Request, urlopen
+from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from io import BytesIO
 from PIL import Image 
-import sqlite3
-import base64
-
+import numpy as np
+import uvicorn
 import cv2
 import ssl
 import uuid
-import requests
-from urllib.request import Request, urlopen
-import uvicorn
-import numpy as np
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-import matplotlib.pyplot as plt
+import sqlite3
+import base64
 
 from utils.adapter_http import get_legacy_session
 from utils.validate_form import *
 from utils.db_connect import *
 from ocr import OCRImages
 from utils import *
+
 
 app = FastAPI()
 db  = LogDataBase()

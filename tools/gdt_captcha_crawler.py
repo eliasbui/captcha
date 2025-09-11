@@ -4,33 +4,28 @@
 GDT Captcha Crawler
 Download captcha images from GDT website with random UIDs
 """
-
+from datetime import datetime
+from PIL import Image
+from tqdm import tqdm
+import requests
+import argparse
+import csv
+import time
+import uuid
 import os
 import sys
 import ssl
+import codecs
 
 # Fix encoding cho Windows console
 if sys.platform == "win32":
     try:
         # Set UTF-8 encoding cho stdout/stderr
-        import codecs
         sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
         sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
     except:
         # Fallback nếu không set được UTF-8
         pass
-import csv
-import time
-import uuid
-import requests
-import argparse
-from datetime import datetime
-from urllib.request import Request, urlopen
-from PIL import Image
-from io import BytesIO
-from tqdm import tqdm
-import numpy as np
-import cv2
 
 class GDTCaptchaCrawler:
     def __init__(self, output_dir="image_crawl/raw_captcha_images", metadata_file="image_crawl/gdt_metadata.csv"):

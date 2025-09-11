@@ -1,8 +1,5 @@
 import os
-import cv2
 import yaml
-import glob
-import string
 import platform
 import numpy as np
 import pandas as pd
@@ -13,14 +10,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from PIL import Image
 from tqdm import tqdm
-from typing import List, Tuple
-import multiprocessing as mp
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-from torchvision.models import resnet18
-from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score
 
 from ocr.dataset.dataset_v1 import CAPTCHADatasetTraining
@@ -92,16 +83,6 @@ def compute_loss(text_batch, text_batch_logits, criterion, char2idx):
     loss = criterion(text_batch_logps, text_batch_targets, text_batch_logps_lens, text_batch_targets_lens)
 
     return loss
-
-# def decode_predictions(text_batch_logits, idx2char):
-#     text_batch_tokens = F.softmax(text_batch_logits, 2).argmax(2) # [T, batch_size]
-#     text_batch_tokens = text_batch_tokens.numpy().T # [batch_size, T]
-#     text_batch_tokens_new = []
-#     for text_tokens in text_batch_tokens:
-#         text = [idx2char[idx] for idx in text_tokens]
-#         text = "".join(text)
-#         text_batch_tokens_new.append(text)
-#     return text_batch_tokens_new
 
 def decode_predictions(text_batch_logits, idx2char, blank_idx=0):
     """

@@ -1,12 +1,12 @@
-import os
-import platform
-import torch
-import torch.nn as nn
-import pandas as pd
-import numpy as np  # Missing import
+
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score
+
+import torch
+import pandas as pd
+import platform
+import os
 import sys
 
 # Add parent directory to path
@@ -14,10 +14,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ocr.dataset.dataset_v1 import CAPTCHADatasetTraining, read_json_file
 from ocr.models.crnn.model import CRNN
-from ocr.models.crnn.traning import (
-    TrainConfig, get_test_set, remove_git_keep, 
-    decode_predictions
-)
+from ocr.models.crnn.traning import (TrainConfig, 
+                                     get_test_set, 
+                                     decode_predictions
+                                     )
+
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def test_model_accuracy():

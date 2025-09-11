@@ -3,16 +3,16 @@
 Training Dataset Manager
 Quản lý và chuẩn bị dataset cho training OCR model
 """
-
-import os
-import json
-import shutil
-import argparse
 from datetime import datetime
 from pathlib import Path
 from collections import Counter
 import pandas as pd
+import random
+import argparse
+import shutil
+import json
 import sys
+import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from torch_config import setup_torch_optimizations
@@ -194,7 +194,6 @@ class TrainingDatasetManager:
         data = list(zip(image_files, labels))
 
         # Shuffle data
-        import random
         random.seed(42)  # For reproducibility
         random.shuffle(data)
 

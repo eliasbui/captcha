@@ -3,18 +3,16 @@
 Captcha Labeling GUI Tool
 GUI tool để labeling thủ công các ảnh captcha đã crawl từ GDT
 """
-
-import os
-import json
-import shutil
-import argparse
+from tkinter import ttk, filedialog, messagebox
+from PIL import Image, ImageTk
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk
+import shutil
+import argparse
 import cv2
-import numpy as np
+import os
+import json
 
 class CaptchaLabelingTool:
     def __init__(self, input_dir="image_crawl/raw_captcha_images",

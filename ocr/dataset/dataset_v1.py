@@ -34,31 +34,6 @@ def preprocess(image):
     # Normalize
     binary = binary.astype(np.float32) / 255.0
     return binary
-class CAPTCHADataset(Dataset):
-    def __init__(self, data_dir, image_fns):
-        self.data_dir = data_dir
-        self.image_fns = image_fns
-        
-    def __len__(self):
-        return len(self.image_fns)
-    
-    def __getitem__(self, index):
-        image_fn = self.image_fns[index]
-        image_fp = os.path.join(self.data_dir, image_fn)
-        image = cv2.imread(image_fp, cv2.IMREAD_UNCHANGED)[:,:,3]
-        image = 255 - image
-        image = preprocess(image)
-
-        image = self.transform(image)
-        text = image_fn.split(".")[0]
-        return image, text
-    
-    def transform(self, image):
-        
-        transform_ops = transforms.Compose([
-            transforms.ToTensor(),
-        ])
-        return transform_ops(image)
     
 class CAPTCHADatasetTraining(Dataset):
     def __init__(self, data_dir, image_fns, label_fns, type = "train", target_size=(50, 130), preprocess = True):
@@ -171,6 +146,7 @@ def create_mapping_char(new_dict):
 idx2char = read_json_file()
 char2idx = {v:k for k,v in idx2char.items()}
 
+#=============== DEPRECATED ==================
 def remove_duplicates(text):
     if len(text) <= 5:
         letters = [text[i] for i in range(len(text))]

@@ -1,10 +1,11 @@
+from torchvision.models import efficientnet_b4
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import efficientnet_b4
-from ocr.dataset.dataset_v1 import CAPTCHADatasetTraining, read_json_file
-import os
 import platform
+import os
+
+from ocr.dataset.dataset_v1 import read_json_file
 
 class AttentionModule(nn.Module):
     def __init__(self, hidden_size):
